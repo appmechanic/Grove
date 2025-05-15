@@ -1,6 +1,6 @@
 import { v2 as cloudinary } from "cloudinary";
 import fs from "fs";
-import { ApiError } from "./ApiError";
+import { ApiError } from "./ApiError.js";
 
 const uploadOnCloudinary = async (localFilePath) => {
   try {
@@ -20,7 +20,7 @@ const uploadOnCloudinary = async (localFilePath) => {
   } catch (error) {
     fs.unlinkSync(localFilePath); // remove the locally saved temporary file as the upload operation got failed
     console.error("Error uploading file to Cloudinary:", error);
-    throw new ApiError(500, "Error uploading file to Cloudinary", error);
+    return null;
   }
 };
 

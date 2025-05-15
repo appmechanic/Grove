@@ -14,10 +14,12 @@ app.use(cookieParser());
 // Import routes
 
 import adminRouter from "./routes/admin.routes.js";
+import userRouter from "./routes/user.routes.js";
 
 
 // Routes declaration
 app.use("/api/v1/admin", adminRouter);
+app.use("/api/v1/user", userRouter);
 export default app;
        
 
