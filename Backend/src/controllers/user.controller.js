@@ -8,11 +8,10 @@ const generateAccessAndRefreshToken = async (userId) => {
   try {
     const user = await User.findById(userId);
 
-    console.log("User-->>", user);
     const accessToken = user.generateAccessToken();
-    console.log("Access Token-->>", accessToken);
+
     const refreshToken = user.generateRefreshToken();
-    console.log("Refresh Token-->>", refreshToken);
+
     user.refreshToken = refreshToken;
     await user.save({ validateBeforeSave: false });
     return { accessToken, refreshToken };
@@ -24,21 +23,23 @@ const generateAccessAndRefreshToken = async (userId) => {
   }
 };
 
-
-
-// POST Request 
+// POST Request
 const registerUser = asyncHandler(async (req, res) => {
   console.log("Request Body-->>", req.body);
   const { email, password } = req.body;
 
   if (!email || !password) {
-    throw new ApiError(400, "All fields are required");
+    return res
+      .status(400)
+      .json(new ApiResponse(400, {}, "All fields are required"));
   }
 
   const existingUser = await User.findOne({ email });
 
   if (existingUser) {
-    throw new ApiError(409, "User already exists");
+    return res
+      .status(409)
+      .json(new ApiResponse(409, {}, "User already exists"));
   }
 
   const newUser = await User.create({
@@ -51,7 +52,15 @@ const registerUser = asyncHandler(async (req, res) => {
   );
 
   if (!createdUser) {
-    throw new ApiError(500, "Something went wrong while registering the user");
+    return res
+      .status(500)
+      .json(
+        new ApiResponse(
+          500,
+          {},
+          "Something went wrong while registering the user"
+        )
+      );
   }
 
   return res
@@ -63,19 +72,21 @@ const loginUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
   if (!email) {
-    throw new ApiError(400, "Email is required");
+    return res.status(400).json(new ApiResponse(400, {}, "Email is required"));
   }
 
   const user = await User.findOne({ email });
 
   if (!user) {
-    throw new ApiError(404, "user not found");
+    return res.status(404).json(new ApiResponse(404, {}, "User not found"));
   }
 
   const isPasswordValid = await user.isPasswordCorrect(password);
 
   if (!isPasswordValid) {
-    throw new ApiError(401, "Invalid credentials");
+    return res
+      .status(401)
+      .json(new ApiResponse(401, {}, "Invalid credentials"));
   }
 
   const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
@@ -87,7 +98,9 @@ const loginUser = asyncHandler(async (req, res) => {
   );
 
   if (!loggedInUser) {
-    throw new ApiError(500, "Something went wrong while logging in");
+    return res
+      .status(500)
+      .json(new ApiResponse(500, {}, "Something went wrong while logging in"));
   }
 
   const options = {
@@ -144,7 +157,11 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     req.body?.refreshToken;
 
   if (!incomingRefreshToken) {
-    throw new ApiError(401, "Unauthorized Request");
+    return res
+      .status(401)
+      .json(
+        new ApiResponse(401, {}, "Refresh Token is required or Unauthorized")
+      );
   }
 
   try {
@@ -156,10 +173,14 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     const user = await User.findById(decodedToken?._id);
 
     if (!user) {
-      throw new ApiError(401, "Invalid Refresh Token");
+      return res
+        .status(401)
+        .json(new ApiResponse(401, {}, "Invalid Refresh Token"));
     }
     if (user?.refreshToken !== incomingRefreshToken) {
-      throw new ApiError(401, "Refresh Token is Expired or Invalid");
+      return res
+        .status(401)
+        .json(new ApiResponse(401, {}, "Refresh Token is Expired or Invalid"));
     }
 
     const options = {
@@ -185,7 +206,11 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
         )
       );
   } catch (error) {
-    throw new ApiError(401, error?.message || "Invalid Refresh Token");
+    return res
+      .status(401)
+      .json(
+        new ApiResponse(401, {}, error?.message || "Invalid Refresh Token")
+      );
   }
 });
 
@@ -195,12 +220,18 @@ const uploadProfileImage = asyncHandler(async (req, res) => {
 
     const avatarLocalPath = req.files?.avatar[0].path;
     if (!avatarLocalPath) {
-      throw new ApiError(400, "Avatar File is required");
+      return res
+        .status(400)
+        .json(new ApiResponse(400, {}, "Avatar File is required"));
     }
 
     const avatar = await uploadOnCloudinary(avatarLocalPath);
     if (!avatar) {
-      throw new ApiError(500, "Something went wrong while uploading image");
+      return res
+        .status(500)
+        .json(
+          new ApiResponse(500, {}, "Something went wrong while uploading image")
+        );
     }
 
     const updatedUser = await User.findByIdAndUpdate(
@@ -215,7 +246,11 @@ const uploadProfileImage = asyncHandler(async (req, res) => {
       }
     ).select("-password -refreshToken");
     if (!updatedUser) {
-      throw new ApiError(500, "Something went wrong while updating user");
+      return res
+        .status(500)
+        .json(
+          new ApiResponse(500, {}, "Something went wrong while updating user")
+        );
     }
     return res
       .status(200)
@@ -224,7 +259,12 @@ const uploadProfileImage = asyncHandler(async (req, res) => {
       );
   } catch (error) {
     console.error("Error uploading profile image:", error);
-    throw new ApiError(500, "Something went wrong while uploading image");
+
+    return res
+      .status(500)
+      .json(
+        new ApiResponse(500, {}, "Something went wrong while uploading image")
+      );
   }
 });
 
@@ -232,7 +272,7 @@ const userRole = asyncHandler(async (req, res) => {
   const { role } = req.body;
 
   if (!role) {
-    throw new ApiError(400, "Role is required");
+    return res.status(400).json(new ApiResponse(400, {}, "Role is required"));
   }
 
   const updatedUser = await User.findByIdAndUpdate(
@@ -247,7 +287,11 @@ const userRole = asyncHandler(async (req, res) => {
     }
   ).select("-password -refreshToken");
   if (!updatedUser) {
-    throw new ApiError(500, "Something went wrong while updating user");
+    return res
+      .status(500)
+      .json(
+        new ApiResponse(500, {}, "Something went wrong while updating user")
+      );
   }
   return res
     .status(200)
@@ -257,17 +301,21 @@ const userRole = asyncHandler(async (req, res) => {
 const userMumOrBusinessDetails = asyncHandler(async (req, res) => {
   const userId = req.user._id;
   if (!userId) {
-    throw new ApiError(400, "User ID is required");
+    return res
+      .status(400)
+      .json(new ApiResponse(400, {}, "User ID is required"));
   }
   const user = await User.findById(userId);
   if (!user) {
-    throw new ApiError(404, "User not found");
+    return res.status(404).json(new ApiResponse(404, {}, "User not found"));
   }
 
   if (user.role === "mum") {
     const { stage } = req.body;
     if (!stage) {
-      throw new ApiError(400, "Stage is required");
+      return res
+        .status(400)
+        .json(new ApiResponse(400, {}, "Stage is required"));
     }
     const updatedUser = await User.findByIdAndUpdate(
       userId,
@@ -281,7 +329,11 @@ const userMumOrBusinessDetails = asyncHandler(async (req, res) => {
       }
     ).select("-password -refreshToken");
     if (!updatedUser) {
-      throw new ApiError(500, "Something went wrong while updating user");
+      return res
+        .status(500)
+        .json(
+          new ApiResponse(500, {}, "Something went wrong while updating user")
+        );
     }
     return res
       .status(200)
@@ -291,7 +343,11 @@ const userMumOrBusinessDetails = asyncHandler(async (req, res) => {
   } else if (user.role === "business") {
     const { businessName, businessDescription } = req.body;
     if (!businessName || !businessDescription) {
-      throw new ApiError(400, "Business name and description are required");
+      return res
+        .status(400)
+        .json(
+          new ApiResponse(400, {}, "Business name and description are required")
+        );
     }
     const updatedUser = await User.findByIdAndUpdate(
       userId,
@@ -306,7 +362,11 @@ const userMumOrBusinessDetails = asyncHandler(async (req, res) => {
       }
     ).select("-password -refreshToken");
     if (!updatedUser) {
-      throw new ApiError(500, "Something went wrong while updating user");
+      return res
+        .status(500)
+        .json(
+          new ApiResponse(500, {}, "Something went wrong while updating user")
+        );
     }
     return res
       .status(200)
@@ -318,24 +378,28 @@ const userMumOrBusinessDetails = asyncHandler(async (req, res) => {
         )
       );
   } else {
-    throw new ApiError(400, "Invalid role");
+    return res.status(400).json(new ApiResponse(400, {}, "Invalid role"));
   }
 });
 
-const userSubscriptionDetails = asyncHandler(async (req, res) => { 
+const userSubscriptionDetails = asyncHandler(async (req, res) => {
   const userId = req.user._id;
-  if(!userId) {
-    throw new ApiError(400, "User ID is required");
+  if (!userId) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, {}, "User ID is required"));
   }
   const user = await User.findById(userId);
   if (!user) {
-    throw new ApiError(404, "User not found");
+    return res.status(404).json(new ApiResponse(404, {}, "User not found"));
   }
 
   if (user.role === "mum") {
     const { mumPlan, mumPlanPrice } = req.body;
     if (!mumPlan || !mumPlanPrice) {
-      throw new ApiError(400, "Mum plan and price are required");
+      return res
+        .status(400)
+        .json(new ApiResponse(400, {}, "Mum plan and price are required"));
     }
     const updatedUser = await User.findByIdAndUpdate(
       userId,
@@ -350,17 +414,27 @@ const userSubscriptionDetails = asyncHandler(async (req, res) => {
       }
     ).select("-password -refreshToken");
     if (!updatedUser) {
-      throw new ApiError(500, "Something went wrong while updating user");
+      return res
+        .status(500)
+        .json(
+          new ApiResponse(500, {}, "Something went wrong while updating user")
+        );
     }
     return res
       .status(200)
       .json(
-        new ApiResponse(200, updatedUser, "Mum subscription details updated successfully")
+        new ApiResponse(
+          200,
+          updatedUser,
+          "Mum subscription details updated successfully"
+        )
       );
   } else if (user.role === "business") {
     const { businessPlan, businessPlanPrice } = req.body;
     if (!businessPlan || !businessPlanPrice) {
-      throw new ApiError(400, "Business plan and price are required");
+      return res
+        .status(400)
+        .json(new ApiResponse(400, {}, "Business plan and price are required"));
     }
     const updatedUser = await User.findByIdAndUpdate(
       userId,
@@ -375,7 +449,11 @@ const userSubscriptionDetails = asyncHandler(async (req, res) => {
       }
     ).select("-password -refreshToken");
     if (!updatedUser) {
-      throw new ApiError(500, "Something went wrong while updating user");
+      return res
+        .status(500)
+        .json(
+          new ApiResponse(500, {}, "Something went wrong while updating user")
+        );
     }
     return res
       .status(200)
@@ -387,18 +465,22 @@ const userSubscriptionDetails = asyncHandler(async (req, res) => {
         )
       );
   } else {
-    throw new ApiError(400, "Invalid role");
+    return res.status(400).json(new ApiResponse(400, {}, "Invalid role"));
   }
 });
 
-const updateUserDetails = asyncHandler(async (req, res) => { 
+const updateUserDetails = asyncHandler(async (req, res) => {
   const userId = req.user._id;
   if (!userId) {
-    throw new ApiError(400, "User ID is required");
+   
+    return res
+      .status(400)
+      .json(new ApiResponse(400, {}, "User ID is required"));
   }
   const user = await User.findById(userId);
   if (!user) {
-    throw new ApiError(404, "User not found");
+    
+    return res.status(404).json(new ApiResponse(404, {}, "User not found"));
   }
 
   const updatedUser = await User.findByIdAndUpdate(
@@ -413,47 +495,58 @@ const updateUserDetails = asyncHandler(async (req, res) => {
     }
   ).select("-password -refreshToken");
   if (!updatedUser) {
-    throw new ApiError(500, "Something went wrong while updating user");
+  
+    return res
+      .status(500)
+      .json(
+        new ApiResponse(500, {}, "Something went wrong while updating user")
+      );
   }
   return res
     .status(200)
-    .json(new ApiResponse(200, updatedUser, "User details updated successfully"));
+    .json(
+      new ApiResponse(200, updatedUser, "User details updated successfully")
+    );
 });
 
 // GET Request
-const getUserDetails = asyncHandler(async (req, res) => { 
+const getUserDetails = asyncHandler(async (req, res) => {
   const userId = req.user._id;
   if (!userId) {
-    throw new ApiError(400, "User ID is required");
+   
+    return res
+      .status(400)
+      .json(new ApiResponse(400, {}, "User ID is required"));
   }
-  const user = await User.findById(userId).select(
-    "-password -refreshToken"
-  );
+  const user = await User.findById(userId).select("-password -refreshToken");
   if (!user) {
-    throw new ApiError(404, "User not found");
+  
+    return res.status(404).json(new ApiResponse(404, {}, "User not found"));
   }
   return res
     .status(200)
     .json(new ApiResponse(200, user, "User details fetched successfully"));
 });
 
-
 // DELETE Request
 
-const deleteUser = asyncHandler(async (req, res) => { 
+const deleteUser = asyncHandler(async (req, res) => {
   const userId = req.user._id;
   if (!userId) {
-    throw new ApiError(400, "User ID is required");
+   
+    return res
+      .status(400)
+      .json(new ApiResponse(400, {}, "User ID is required"));
   }
   const user = await User.findByIdAndDelete(userId);
   if (!user) {
-    throw new ApiError(404, "User not found for deletion");
+   
+    return res.status(404).json(new ApiResponse(404, {}, "User not found"));
   }
   return res
     .status(200)
     .json(new ApiResponse(200, {}, "User deleted successfully"));
-})
-
+});
 
 export {
   registerUser,
