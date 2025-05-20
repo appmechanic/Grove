@@ -1,9 +1,7 @@
 import AWS from "aws-sdk";
 import { v4 as uuidv4 } from "uuid";
-import fs from "fs/promises";
-import path from "path";
 
-const spacesEndpoint = new AWS.Endpoint(process.env.DO_SPACES_ENDPOINT);
+const spacesEndpoint = `https://${process.env.DO_SPACES_ENDPOINT}`;
 
 const s3 = new AWS.S3({
   endpoint: spacesEndpoint,
