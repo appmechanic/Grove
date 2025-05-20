@@ -4,6 +4,10 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import User from "../models/user.model.js";
 import jwt from "jsonwebtoken";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
+import crypto from "crypto";
+import { sendEmail } from "../utils/sendEmail.js";
+import { uploadToDO } from "../utils/digitalOcean.js";
+
 const generateAccessAndRefreshToken = async (userId) => {
   try {
     const user = await User.findById(userId);
@@ -42,9 +46,46 @@ const registerUser = asyncHandler(async (req, res) => {
       .json(new ApiResponse(409, {}, "User already exists"));
   }
 
+  const token = crypto.randomBytes(64).toString("hex");
+
   const newUser = await User.create({
     email,
     password,
+    emailVerificationToken: token,
+  });
+
+  const verificationLink = `${process.env.SERVER_URL}/api/v1/user/verify-email/${token}`;
+
+  await sendEmail({
+    to: email,
+    subject: "Verify your email to activate your Grove account",
+    html: `
+    <div style="font-family: Arial, sans-serif; padding: 20px; line-height: 1.6;">
+      <h2>Hi there,</h2>
+
+      <p>Thank you for signing up for <strong>Grove</strong> – we're excited to have you on board!</p>
+
+      <p>To complete your registration and start using Grove, please verify your email address by clicking the button below:</p>
+
+      <p style="text-align: center;">
+        <a href="${verificationLink}" target="_blank" style="background-color: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px;">
+          Verify My Email
+        </a>
+      </p>
+
+      <p>Or copy and paste the link below into your browser:</p>
+      <p style="word-break: break-all;"><a href="${verificationLink}" target="_blank">${verificationLink}</a></p>
+
+      <p>This link will expire in 24 hours for security reasons.</p>
+
+      <p>If you didn’t create a Grove account, you can safely ignore this email.</p>
+
+      <p>Welcome to a better way to grow with Grove.</p>
+
+      <br />
+      <p>Warm regards,<br /><strong>The Grove Team</strong></p>
+    </div>
+  `,
   });
 
   const createdUser = await User.findById(newUser._id).select(
@@ -65,7 +106,337 @@ const registerUser = asyncHandler(async (req, res) => {
 
   return res
     .status(201)
-    .json(new ApiResponse(200, createdUser, "User created successfully"));
+    .json(
+      new ApiResponse(
+        200,
+        createdUser,
+        "User created successfully and Verification email sent, please check your inbox and spam folder as well"
+      )
+    );
+});
+
+const verifyEmail = asyncHandler(async (req, res) => {
+  const { token } = req.params;
+  
+  if (!token) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, {}, "Email verification token is required"));
+  }
+  
+  const user = await User.findOne({
+    emailVerificationToken: token,
+  });
+  
+  if (!user) {
+    // Return HTML response for invalid token
+    return res
+      .status(404)
+      .send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Email Verification Failed</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              line-height: 1.6;
+              max-width: 600px;
+              margin: 0 auto;
+              padding: 20px;
+              text-align: center;
+            }
+            .container {
+              border: 1px solid #e0e0e0;
+              border-radius: 5px;
+              padding: 30px;
+              margin-top: 50px;
+              box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            }
+            h1 {
+              color: #d9534f;
+            }
+            .message {
+              margin: 20px 0;
+              font-size: 18px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1>Email Verification Failed</h1>
+            <div class="message">
+              Sorry, we couldn't verify your email address. The verification link is invalid or has expired.
+            </div>
+            <p>Please try signing up again or contact support if you continue to experience issues.</p>
+          </div>
+        </body>
+        </html>
+      `);
+  }
+  
+  if (user.isVerified) {
+    // Return HTML response for already verified user
+    return res
+      .status(200)
+      .send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Already Verified</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              line-height: 1.6;
+              max-width: 600px;
+              margin: 0 auto;
+              padding: 20px;
+              text-align: center;
+            }
+            .container {
+              border: 1px solid #e0e0e0;
+              border-radius: 5px;
+              padding: 30px;
+              margin-top: 50px;
+              box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            }
+            h1 {
+              color: #5cb85c;
+            }
+            .message {
+              margin: 20px 0;
+              font-size: 18px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1>Already Verified</h1>
+            <div class="message">
+              Your email has already been verified. You can now login to your Grove account.
+            </div>
+            <p>Thank you for using Grove!</p>
+          </div>
+        </body>
+        </html>
+      `);
+  }
+  
+  // Verify the user
+  user.isVerified = true;
+  user.emailVerificationToken = undefined;
+  await user.save();
+  
+  // Return HTML response for successful verification
+  return res
+    .status(200)
+    .send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Email Verified Successfully</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+          }
+          .container {
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+            padding: 30px;
+            margin-top: 50px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+          }
+          h1 {
+            color: #5cb85c;
+          }
+          .message {
+            margin: 20px 0;
+            font-size: 18px;
+          }
+          .login-btn {
+            display: inline-block;
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 5px;
+            margin-top: 15px;
+            font-weight: bold;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>Email Verified Successfully!</h1>
+          <div class="message">
+            Your email has been verified successfully. You can now log in to your Grove account.
+          </div>
+          <p style="margin-top: 30px;">Thank you for choosing Grove!</p>
+        </div>
+      </body>
+      </html>
+    `);
+});
+
+const resendVerificationEmail = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+
+  // Check if email is provided
+  if (!email) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, {}, "Email is required"));
+  }
+
+  // Find the user by email
+  const user = await User.findOne({ email });
+
+  // If user doesn't exist
+  if (!user) {
+    return res
+      .status(404)
+      .json(new ApiResponse(404, {}, "User not found"));
+  }
+
+  // Check if user is already verified
+  if (user.isVerified) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, {}, "Email is already verified"));
+  }
+
+  // Generate new verification token
+  const token = crypto.randomBytes(64).toString("hex");
+  
+  // Update user with new token
+  user.emailVerificationToken = token;
+  await user.save();
+
+  // Create verification link
+  const verificationLink = `${process.env.SERVER_URL}/api/v1/user/verify-email/${token}`;
+
+  // Send email
+  await sendEmail({
+    to: email,
+    subject: "Verify your email to activate your Grove account",
+    html: `
+    <div style="font-family: Arial, sans-serif; padding: 20px; line-height: 1.6;">
+      <h2>Hi there,</h2>
+      
+      <p>You requested a new verification email for your <strong>Grove</strong> account.</p>
+      
+      <p>To complete your registration and start using Grove, please verify your email address by clicking the button below:</p>
+      
+      <p style="text-align: center;">
+        <a href="${verificationLink}" target="_blank" style="background-color: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px;">
+          Verify My Email
+        </a>
+      </p>
+      
+      <p>Or copy and paste the link below into your browser:</p>
+      <p style="word-break: break-all;"><a href="${verificationLink}" target="_blank">${verificationLink}</a></p>
+      
+      <p>This link will expire in 24 hours for security reasons.</p>
+      
+      <p>If you didn't request this email, you can safely ignore it.</p>
+      
+      <br />
+      <p>Warm regards,<br /><strong>The Grove Team</strong></p>
+    </div>
+  `,
+  });
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        {},
+        "Verification email sent successfully, please check your inbox and spam folder"
+      )
+    );
+});
+
+const forgotPassword = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+
+  const user = await User.findOne({ email });
+  if (!user) {
+    return res.status(404).json(new ApiResponse(404, {}, "User not found"));
+  }
+  if(!user.isVerified) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, {}, "User is not verified, please verify your email first"));
+  }
+
+  const token = crypto.randomBytes(32).toString("hex");
+  user.resetPasswordToken = token;
+  user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
+  await user.save({ validateBeforeSave: false });
+
+  const resetLink = `${process.env.CLIENT_URL}/reset-password?token=${token}`;
+
+  await sendEmail({
+    to: email,
+    subject: "Reset your Grove password",
+    html: `
+    <div style="font-family: Arial, sans-serif; padding: 20px; line-height: 1.6;">
+      <h2>Hi ${user.fullName?.split(" ")[0] || "there"},</h2>
+
+      <p>We received a request to reset the password for your <strong>Grove</strong> account.</p>
+
+      <p>To create a new password, please click the button below:</p>
+
+      <p style="text-align: center;">
+        <a href="${resetLink}" target="_blank" style="background-color: #f39c12; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px;">
+          🔁 Reset My Password
+        </a>
+      </p>
+
+      <p>Or paste the following link into your browser:</p>
+      <p style="word-break: break-all;"><a href="${resetLink}" target="_blank">${resetLink}</a></p>
+
+      <p>If you didn’t request a password reset, you can safely ignore this email — your password will remain unchanged.</p>
+
+      <p>Need help? Reach out to us.</p>
+
+      <br />
+      <p>Stay secure,<br /><strong>The Grove Team</strong></p>
+    </div>
+  `,
+  });
+  res.status(200).json(new ApiResponse(200, user, "Password reset email sent"));
+});
+
+const resetPassword = asyncHandler(async (req, res) => {
+  const { token, newPassword } = req.body;
+
+  const user = await User.findOne({
+    resetPasswordToken: token,
+    resetPasswordExpires: { $gt: Date.now() },
+  });
+
+  if (!user) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, {}, "Invalid or expired token"));
+  }
+
+  user.password = newPassword;
+  user.resetPasswordToken = undefined;
+  user.resetPasswordExpires = undefined;
+
+  await user.save();
+  res.status(200).json(new ApiResponse(200, {}, "Password reset successful"));
 });
 
 const loginUser = asyncHandler(async (req, res) => {
@@ -126,7 +497,7 @@ const loginUser = asyncHandler(async (req, res) => {
 });
 
 const logoutUser = asyncHandler(async (req, res) => {
-  await User.findByIdAndUpdate(
+  const user = await User.findByIdAndUpdate(
     req.user._id,
     {
       $unset: {
@@ -147,7 +518,7 @@ const logoutUser = asyncHandler(async (req, res) => {
     .status(200)
     .clearCookie("accessToken", options)
     .clearCookie("refreshToken", options)
-    .json(new ApiResponse(200, {}, "User logged out successfully"));
+    .json(new ApiResponse(200, user, "User logged out successfully"));
 });
 
 const refreshAccessToken = asyncHandler(async (req, res) => {
@@ -214,7 +585,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
   }
 });
 
-const uploadProfileImage = asyncHandler(async (req, res) => {
+const uploadProfileImageCloudinary = asyncHandler(async (req, res) => {
   try {
     console.log("Req Files-->>", req.files);
 
@@ -252,6 +623,57 @@ const uploadProfileImage = asyncHandler(async (req, res) => {
           new ApiResponse(500, {}, "Something went wrong while updating user")
         );
     }
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(200, updatedUser, "Profile image uploaded successfully")
+      );
+  } catch (error) {
+    console.error("Error uploading profile image:", error);
+
+    return res
+      .status(500)
+      .json(
+        new ApiResponse(500, {}, "Something went wrong while uploading image")
+      );
+  }
+});
+
+const uploadProfileImageDigitalOcean = asyncHandler(async (req, res) => {
+  try {
+    console.log("Req Files-->>", req.file);
+
+    // Check if file exists
+    if (!req.file) {
+      return res
+        .status(400)
+        .json(new ApiResponse(400, {}, "Avatar file is required"));
+    }
+
+    // Upload to Digital Ocean Spaces
+    const avatarUrl = await uploadToDO(req.file);
+
+    // Update user in database with the new avatar URL
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user._id,
+      {
+        $set: {
+          avatar: avatarUrl,
+        },
+      },
+      {
+        new: true,
+      }
+    ).select("-password -refreshToken");
+
+    if (!updatedUser) {
+      return res
+        .status(500)
+        .json(
+          new ApiResponse(500, {}, "Something went wrong while updating user")
+        );
+    }
+
     return res
       .status(200)
       .json(
@@ -472,14 +894,12 @@ const userSubscriptionDetails = asyncHandler(async (req, res) => {
 const updateUserDetails = asyncHandler(async (req, res) => {
   const userId = req.user._id;
   if (!userId) {
-   
     return res
       .status(400)
       .json(new ApiResponse(400, {}, "User ID is required"));
   }
   const user = await User.findById(userId);
   if (!user) {
-    
     return res.status(404).json(new ApiResponse(404, {}, "User not found"));
   }
 
@@ -495,7 +915,6 @@ const updateUserDetails = asyncHandler(async (req, res) => {
     }
   ).select("-password -refreshToken");
   if (!updatedUser) {
-  
     return res
       .status(500)
       .json(
@@ -513,14 +932,12 @@ const updateUserDetails = asyncHandler(async (req, res) => {
 const getUserDetails = asyncHandler(async (req, res) => {
   const userId = req.user._id;
   if (!userId) {
-   
     return res
       .status(400)
       .json(new ApiResponse(400, {}, "User ID is required"));
   }
   const user = await User.findById(userId).select("-password -refreshToken");
   if (!user) {
-  
     return res.status(404).json(new ApiResponse(404, {}, "User not found"));
   }
   return res
@@ -533,14 +950,12 @@ const getUserDetails = asyncHandler(async (req, res) => {
 const deleteUser = asyncHandler(async (req, res) => {
   const userId = req.user._id;
   if (!userId) {
-   
     return res
       .status(400)
       .json(new ApiResponse(400, {}, "User ID is required"));
   }
   const user = await User.findByIdAndDelete(userId);
   if (!user) {
-   
     return res.status(404).json(new ApiResponse(404, {}, "User not found"));
   }
   return res
@@ -550,13 +965,18 @@ const deleteUser = asyncHandler(async (req, res) => {
 
 export {
   registerUser,
+  verifyEmail,
   loginUser,
   logoutUser,
+  resendVerificationEmail,
   refreshAccessToken,
-  uploadProfileImage,
+  uploadProfileImageCloudinary,
+  uploadProfileImageDigitalOcean,
   userRole,
   userMumOrBusinessDetails,
   userSubscriptionDetails,
   getUserDetails,
   deleteUser,
+  forgotPassword,
+  resetPassword,
 };

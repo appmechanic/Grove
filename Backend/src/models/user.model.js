@@ -19,10 +19,23 @@ const userSchema = new Schema(
     role: {
       type: String,
       enum: ["mum", "business"],
-      
     },
     avatar: {
       type: String,
+    },
+
+    isVerified: {
+      type: Boolean,
+      default: false,
+    },
+    emailVerificationToken: {
+      type: String,
+    },
+    resetPasswordToken: {
+      type: String,
+    },
+    resetPasswordExpires: {
+      type: Date,            
     },
 
     // Business-only details

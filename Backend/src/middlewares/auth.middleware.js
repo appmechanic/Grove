@@ -1,5 +1,6 @@
 import User from "../models/user.model.js";
 import { ApiError } from "../utils/ApiError.js";
+import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import jwt from "jsonwebtoken";
 
@@ -12,7 +13,9 @@ export const verifyJWT = asyncHandler(async (req, res, next) => {
     console.log("Token-->>", token);
 
     if (!token) {
-      throw new ApiError(401, "Unauthorized Request");
+      return res
+        .status(401)
+        .json(new ApiResponse(401, {}, "Unauthorized Request"));
     }
 
     const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
@@ -21,12 +24,18 @@ export const verifyJWT = asyncHandler(async (req, res, next) => {
       "-password -refreshToken"
     );
     if (!user) {
-      throw new ApiError(401, "Invalid Access Token");
+      return res
+        .status(401)
+        .json(new ApiResponse(401, {}, "Invalid Access Token"));
     }
 
     req.user = user;
     next();
   } catch (error) {
-    throw new ApiError(401, "Unauthorized Access Token");
+    return res
+      .status(401)
+      .json(
+        new ApiResponse(401, {}, error.message || "Unauthorized Access Token")
+      );
   }
 });

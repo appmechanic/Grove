@@ -1,33 +1,44 @@
 import { Router } from "express";
 import {
   deleteUser,
+  forgotPassword,
   getUserDetails,
   loginUser,
   logoutUser,
   refreshAccessToken,
   registerUser,
-  uploadProfileImage,
+  resendVerificationEmail,
+  resetPassword,
+  uploadProfileImageCloudinary,
+  uploadProfileImageDigitalOcean,
   userMumOrBusinessDetails,
   userRole,
   userSubscriptionDetails,
+  verifyEmail,
 } from "../controllers/user.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
-import { upload } from "../middlewares/multer.middleware.js";
+import { upload, uploadSingle } from "../middlewares/multer.middleware.js";
 
 const router = Router();
 
 router.route("/register").post(registerUser);
 
+router.route("/verify-email/:token").get(verifyEmail);
+
+router.route("/resend-verification-email").post(resendVerificationEmail);
+
+router.route("/forgot-password").post(forgotPassword);
+
+router.route("/reset-password").post(resetPassword);
+
 router.route("/login").post(loginUser);
 
 // Secure Routes
-router
-  .route("/upload-avatar")
-  .post(
-    verifyJWT,
-    upload.fields([{ name: "avatar", maxCount: 1 }]), // avatar must be same name as in the frontend
-    uploadProfileImage
-  );
+router.route("/upload-avatar").post(
+  verifyJWT,
+  uploadSingle("avatar"), // avatar must be same name as in the frontend
+  uploadProfileImageDigitalOcean
+);
 router.route("/logout").post(verifyJWT, logoutUser);
 router.route("/refresh-token").post(refreshAccessToken);
 router.route("/user-role").post(verifyJWT, userRole);
