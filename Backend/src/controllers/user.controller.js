@@ -117,22 +117,20 @@ const registerUser = asyncHandler(async (req, res) => {
 
 const verifyEmail = asyncHandler(async (req, res) => {
   const { token } = req.params;
-  
+
   if (!token) {
     return res
       .status(400)
       .json(new ApiResponse(400, {}, "Email verification token is required"));
   }
-  
+
   const user = await User.findOne({
     emailVerificationToken: token,
   });
-  
+
   if (!user) {
     // Return HTML response for invalid token
-    return res
-      .status(404)
-      .send(`
+    return res.status(404).send(`
         <!DOCTYPE html>
         <html>
         <head>
@@ -175,12 +173,10 @@ const verifyEmail = asyncHandler(async (req, res) => {
         </html>
       `);
   }
-  
+
   if (user.isVerified) {
     // Return HTML response for already verified user
-    return res
-      .status(200)
-      .send(`
+    return res.status(200).send(`
         <!DOCTYPE html>
         <html>
         <head>
@@ -223,16 +219,14 @@ const verifyEmail = asyncHandler(async (req, res) => {
         </html>
       `);
   }
-  
+
   // Verify the user
   user.isVerified = true;
   user.emailVerificationToken = undefined;
   await user.save();
-  
+
   // Return HTML response for successful verification
-  return res
-    .status(200)
-    .send(`
+  return res.status(200).send(`
       <!DOCTYPE html>
       <html>
       <head>
@@ -291,9 +285,7 @@ const resendVerificationEmail = asyncHandler(async (req, res) => {
 
   // Check if email is provided
   if (!email) {
-    return res
-      .status(400)
-      .json(new ApiResponse(400, {}, "Email is required"));
+    return res.status(400).json(new ApiResponse(400, {}, "Email is required"));
   }
 
   // Find the user by email
@@ -301,9 +293,7 @@ const resendVerificationEmail = asyncHandler(async (req, res) => {
 
   // If user doesn't exist
   if (!user) {
-    return res
-      .status(404)
-      .json(new ApiResponse(404, {}, "User not found"));
+    return res.status(404).json(new ApiResponse(404, {}, "User not found"));
   }
 
   // Check if user is already verified
@@ -315,7 +305,7 @@ const resendVerificationEmail = asyncHandler(async (req, res) => {
 
   // Generate new verification token
   const token = crypto.randomBytes(64).toString("hex");
-  
+
   // Update user with new token
   user.emailVerificationToken = token;
   await user.save();
@@ -372,10 +362,16 @@ const forgotPassword = asyncHandler(async (req, res) => {
   if (!user) {
     return res.status(404).json(new ApiResponse(404, {}, "User not found"));
   }
-  if(!user.isVerified) {
+  if (!user.isVerified) {
     return res
       .status(400)
-      .json(new ApiResponse(400, {}, "User is not verified, please verify your email first"));
+      .json(
+        new ApiResponse(
+          400,
+          {},
+          "User is not verified, please verify your email first"
+        )
+      );
   }
 
   const token = crypto.randomBytes(32).toString("hex");
@@ -383,14 +379,14 @@ const forgotPassword = asyncHandler(async (req, res) => {
   user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
   await user.save({ validateBeforeSave: false });
 
-  const resetLink = `${process.env.CLIENT_URL}/reset-password?token=${token}`;
+  const resetLink = `${process.env.SERVER_URL}/api/v1/user/reset-password/${token}`;
 
   await sendEmail({
     to: email,
     subject: "Reset your Grove password",
     html: `
     <div style="font-family: Arial, sans-serif; padding: 20px; line-height: 1.6;">
-      <h2>Hi ${user.fullName?.split(" ")[0] || "there"},</h2>
+      <h2>Hi there,},</h2>
 
       <p>We received a request to reset the password for your <strong>Grove</strong> account.</p>
 
@@ -417,8 +413,220 @@ const forgotPassword = asyncHandler(async (req, res) => {
   res.status(200).json(new ApiResponse(200, user, "Password reset email sent"));
 });
 
+// const resetPassword = asyncHandler(async (req, res) => {
+//   const { token } = req.params;
+
+//   const user = await User.findOne({
+//     resetPasswordToken: token,
+//     resetPasswordExpires: { $gt: Date.now() },
+//   });
+
+//   if (!user) {
+//     return res.send(`
+//       <!DOCTYPE html>
+//       <html>
+//       <head>
+//         <title>Password Reset Error</title>
+//         <style>
+//           body {
+//             font-family: Arial, sans-serif;
+//             line-height: 1.6;
+//             max-width: 600px;
+//             margin: 0 auto;
+//             padding: 20px;
+//             text-align: center;
+//           }
+//           .error-container {
+//             background-color: #ffe6e6;
+//             border: 1px solid #ff8080;
+//             border-radius: 5px;
+//             padding: 20px;
+//             margin-top: 40px;
+//           }
+//           h1 {
+//             color: #333;
+//           }
+//           .error-message {
+//             color: #cc0000;
+//             font-weight: bold;
+//           }
+//         </style>
+//       </head>
+//       <body>
+//         <div class="error-container">
+//           <h1>Password Reset Error</h1>
+//           <p class="error-message">Invalid or expired password reset link.</p>
+//           <p>Please request a new password reset link from the login page.</p>
+//         </div>
+//       </body>
+//       </html>
+//     `);
+//   }
+
+//   user.password = newPassword;
+//   user.resetPasswordToken = undefined;
+//   user.resetPasswordExpires = undefined;
+
+//   await user.save();
+//   res.status(200).json(new ApiResponse(200, {}, "Password reset successful"));
+// });
+
 const resetPassword = asyncHandler(async (req, res) => {
-  const { token, newPassword } = req.body;
+  const { token, newPassword, confirmPassword } = req.body;
+
+  // Server-side validation
+  if (newPassword !== confirmPassword) {
+    return res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Password Reset Error</title>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+          }
+          .error-container {
+            background-color: #ffe6e6;
+            border: 1px solid #ff8080;
+            border-radius: 5px;
+            padding: 20px;
+            margin-top: 40px;
+          }
+          h1 {
+            color: #333;
+          }
+          .error-message {
+            color: #cc0000;
+            font-weight: bold;
+          }
+          .back-button {
+            display: inline-block;
+            margin-top: 15px;
+            background-color: #f39c12;
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="error-container">
+          <h1>Password Reset Error</h1>
+          <p class="error-message">Passwords do not match.</p>
+          <a href="/api/v1/user/reset-password/${token}" class="back-button">Try Again</a>
+        </div>
+      </body>
+      </html>
+    `);
+  }
+   if (newPassword.length < 8) {
+    return res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Password Reset Error</title>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+          }
+          .error-container {
+            background-color: #ffe6e6;
+            border: 1px solid #ff8080;
+            border-radius: 5px;
+            padding: 20px;
+            margin-top: 40px;
+          }
+          h1 {
+            color: #333;
+          }
+          .error-message {
+            color: #cc0000;
+            font-weight: bold;
+          }
+          .back-button {
+            display: inline-block;
+            margin-top: 15px;
+            background-color: #f39c12;
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="error-container">
+          <h1>Password Reset Error</h1>
+          <p class="error-message">Password must be at least 8 characters long.</p>
+          <a href="/api/v1/user/reset-password/${token}" class="back-button">Try Again</a>
+        </div>
+      </body>
+      </html>
+    `);
+  }
+  
+  const specialCharRegex = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]+/;
+  if (!specialCharRegex.test(newPassword)) {
+    return res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Password Reset Error</title>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+          }
+          .error-container {
+            background-color: #ffe6e6;
+            border: 1px solid #ff8080;
+            border-radius: 5px;
+            padding: 20px;
+            margin-top: 40px;
+          }
+          h1 {
+            color: #333;
+          }
+          .error-message {
+            color: #cc0000;
+            font-weight: bold;
+          }
+          .back-button {
+            display: inline-block;
+            margin-top: 15px;
+            background-color: #f39c12;
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="error-container">
+          <h1>Password Reset Error</h1>
+          <p class="error-message">Password must contain at least one special character.</p>
+          <a href="/api/v1/user/reset-password/${token}" class="back-button">Try Again</a>
+        </div>
+      </body>
+      </html>
+    `);
+  }
 
   const user = await User.findOne({
     resetPasswordToken: token,
@@ -426,9 +634,45 @@ const resetPassword = asyncHandler(async (req, res) => {
   });
 
   if (!user) {
-    return res
-      .status(400)
-      .json(new ApiResponse(400, {}, "Invalid or expired token"));
+    return res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Password Reset Error</title>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+          }
+          .error-container {
+            background-color: #ffe6e6;
+            border: 1px solid #ff8080;
+            border-radius: 5px;
+            padding: 20px;
+            margin-top: 40px;
+          }
+          h1 {
+            color: #333;
+          }
+          .error-message {
+            color: #cc0000;
+            font-weight: bold;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="error-container">
+          <h1>Password Reset Error</h1>
+          <p class="error-message">Invalid or expired password reset link.</p>
+          <p>Please request a new password reset link from the login page.</p>
+        </div>
+      </body>
+      </html>
+    `);
   }
 
   user.password = newPassword;
@@ -436,7 +680,58 @@ const resetPassword = asyncHandler(async (req, res) => {
   user.resetPasswordExpires = undefined;
 
   await user.save();
-  res.status(200).json(new ApiResponse(200, {}, "Password reset successful"));
+
+  // Send success page
+  return res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Password Reset Success</title>
+      <style>
+        body {
+          font-family: Arial, sans-serif;
+          line-height: 1.6;
+          max-width: 600px;
+          margin: 0 auto;
+          padding: 20px;
+          text-align: center;
+        }
+        .success-container {
+          background-color: #e6ffe6;
+          border: 1px solid #80ff80;
+          border-radius: 5px;
+          padding: 20px;
+          margin-top: 40px;
+        }
+        h1 {
+          color: #333;
+        }
+        .success-message {
+          color: #008800;
+          font-weight: bold;
+          font-size: 18px;
+        }
+        .login-button {
+          display: inline-block;
+          margin-top: 20px;
+          background-color: #f39c12;
+          color: white;
+          text-decoration: none;
+          padding: 12px 25px;
+          border-radius: 4px;
+          font-weight: bold;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="success-container">
+        <h1>Password Reset Successful</h1>
+        <p class="success-message">Your password has been successfully updated.</p>
+        <p>You can now log in to your account with your new password.</p>
+      </div>
+    </body>
+    </html>
+  `);
 });
 
 const loginUser = asyncHandler(async (req, res) => {
@@ -945,19 +1240,306 @@ const getUserDetails = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, user, "User details fetched successfully"));
 });
 
+const renderResetPasswordForm = asyncHandler(async (req, res) => {
+  const { token } = req.params;
+
+  const user = await User.findOne({
+    resetPasswordToken: token,
+    resetPasswordExpires: { $gt: Date.now() },
+  });
+
+  if (!user) {
+    return res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Password Reset Error</title>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+          }
+          .error-container {
+            background-color: #ffe6e6;
+            border: 1px solid #ff8080;
+            border-radius: 5px;
+            padding: 20px;
+            margin-top: 40px;
+          }
+          h1 {
+            color: #333;
+          }
+          .error-message {
+            color: #cc0000;
+            font-weight: bold;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="error-container">
+          <h1>Password Reset Error</h1>
+          <p class="error-message">Invalid or expired password reset link.</p>
+          <p>Please request a new password reset link from the login page.</p>
+        </div>
+      </body>
+      </html>
+    `);
+  }
+
+  // Render the password reset form
+  // res.send(`
+  //   <!DOCTYPE html>
+  //   <html>
+  //   <head>
+  //     <title>Reset Your Password</title>
+  //     <style>
+  //       body {
+  //         font-family: Arial, sans-serif;
+  //         line-height: 1.6;
+  //         max-width: 500px;
+  //         margin: 0 auto;
+  //         padding: 20px;
+  //       }
+  //       .form-container {
+  //         background-color: #f9f9f9;
+  //         border: 1px solid #ddd;
+  //         border-radius: 5px;
+  //         padding: 25px;
+  //         margin-top: 40px;
+  //       }
+  //       h1 {
+  //         color: #333;
+  //         text-align: center;
+  //         margin-bottom: 25px;
+  //       }
+  //       .form-group {
+  //         margin-bottom: 20px;
+  //       }
+  //       label {
+  //         display: block;
+  //         margin-bottom: 8px;
+  //         font-weight: bold;
+  //       }
+  //       input[type="password"] {
+  //         width: 100%;
+  //         padding: 10px;
+  //         border: 1px solid #ddd;
+  //         border-radius: 4px;
+  //         font-size: 16px;
+  //       }
+  //       button {
+  //         background-color: #f39c12;
+  //         color: white;
+  //         border: none;
+  //         padding: 12px 20px;
+  //         border-radius: 4px;
+  //         font-size: 16px;
+  //         cursor: pointer;
+  //         width: 100%;
+  //       }
+  //       button:hover {
+  //         background-color: #e67e22;
+  //       }
+  //       .error-message {
+  //         color: #cc0000;
+  //         margin-top: 5px;
+  //         display: none;
+  //       }
+  //       .error-visible {
+  //         display: block;
+  //       }
+  //     </style>
+  //   </head>
+  //   <body>
+  //     <div class="form-container">
+  //       <h1>Reset Your Password</h1>
+  //       <form id="resetForm" action="/api/v1/user/reset-password" method="POST">
+  //         <input type="hidden" name="token" value="${token}">
+          
+  //         <div class="form-group">
+  //           <label for="password">New Password</label>
+  //           <input type="password" id="password" name="newPassword" required>
+  //         </div>
+          
+  //         <div class="form-group">
+  //           <label for="confirmPassword">Confirm Password</label>
+  //           <input type="password" id="confirmPassword" name="confirmPassword" required>
+  //           <div id="passwordError" class="error-message">Passwords must match</div>
+  //         </div>
+          
+  //         <button type="submit">Reset Password</button>
+  //       </form>
+  //     </div>
+
+  //     <script>
+  //       document.getElementById('resetForm').addEventListener('submit', function(event) {
+  //         const password = document.getElementById('password').value;
+  //         const confirmPassword = document.getElementById('confirmPassword').value;
+  //         const passwordError = document.getElementById('passwordError');
+          
+  //         if (password !== confirmPassword) {
+  //           event.preventDefault();
+  //           passwordError.classList.add('error-visible');
+  //         } else {
+  //           passwordError.classList.remove('error-visible');
+  //         }
+  //       });
+  //     </script>
+  //   </body>
+  //   </html>
+  // `);
+   res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Reset Your Password</title>
+      <style>
+        body {
+          font-family: Arial, sans-serif;
+          line-height: 1.6;
+          max-width: 500px;
+          margin: 0 auto;
+          padding: 20px;
+        }
+        .form-container {
+          background-color: #f9f9f9;
+          border: 1px solid #ddd;
+          border-radius: 5px;
+          padding: 25px;
+          margin-top: 40px;
+        }
+        h1 {
+          color: #333;
+          text-align: center;
+          margin-bottom: 25px;
+        }
+        .form-group {
+          margin-bottom: 20px;
+        }
+        label {
+          display: block;
+          margin-bottom: 8px;
+          font-weight: bold;
+        }
+        input[type="password"] {
+          width: 100%;
+          padding: 10px;
+          border: 1px solid #ddd;
+          border-radius: 4px;
+          font-size: 16px;
+        }
+        button {
+          background-color: #f39c12;
+          color: white;
+          border: none;
+          padding: 12px 20px;
+          border-radius: 4px;
+          font-size: 16px;
+          cursor: pointer;
+          width: 100%;
+        }
+        button:hover {
+          background-color: #e67e22;
+        }
+        .error-message {
+          color: #cc0000;
+          margin-top: 5px;
+          display: none;
+        }
+        .error-visible {
+          display: block;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="form-container">
+        <h1>Reset Your Password</h1>
+        <form id="resetForm" action="/api/v1/user/reset-password" method="POST">
+          <input type="hidden" name="token" value="${token}">
+          
+          <div class="form-group">
+            <label for="password">New Password</label>
+            <input type="password" id="password" name="newPassword" required>
+            <div id="passwordLengthError" class="error-message">Password must be at least 8 characters long</div>
+            <div id="passwordSpecialCharError" class="error-message">Password must contain at least one special character</div>
+          </div>
+          
+          <div class="form-group">
+            <label for="confirmPassword">Confirm Password</label>
+            <input type="password" id="confirmPassword" name="confirmPassword" required>
+            <div id="passwordMatchError" class="error-message">Passwords must match</div>
+          </div>
+          
+          <button type="submit">Reset Password</button>
+        </form>
+      </div>
+
+      <script>
+        document.getElementById('resetForm').addEventListener('submit', function(event) {
+          const password = document.getElementById('password').value;
+          const confirmPassword = document.getElementById('confirmPassword').value;
+          const passwordMatchError = document.getElementById('passwordMatchError');
+          const passwordLengthError = document.getElementById('passwordLengthError');
+          const passwordSpecialCharError = document.getElementById('passwordSpecialCharError');
+          
+          let isValid = true;
+          
+          // Check password length
+          if (password.length < 8) {
+            passwordLengthError.classList.add('error-visible');
+            isValid = false;
+          } else {
+            passwordLengthError.classList.remove('error-visible');
+          }
+          
+          // Check for special character
+          const specialCharRegex = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]+/;
+          if (!specialCharRegex.test(password)) {
+            passwordSpecialCharError.classList.add('error-visible');
+            isValid = false;
+          } else {
+            passwordSpecialCharError.classList.remove('error-visible');
+          }
+          
+          // Check if passwords match
+          if (password !== confirmPassword) {
+            passwordMatchError.classList.add('error-visible');
+            isValid = false;
+          } else {
+            passwordMatchError.classList.remove('error-visible');
+          }
+          
+          if (!isValid) {
+            event.preventDefault();
+          }
+        });
+      </script>
+    </body>
+    </html>
+  `);
+});
+
 // DELETE Request
 
 const deleteUser = asyncHandler(async (req, res) => {
   const userId = req.user._id;
+  // Check if userId is provided
   if (!userId) {
     return res
       .status(400)
       .json(new ApiResponse(400, {}, "User ID is required"));
   }
+  
   const user = await User.findByIdAndDelete(userId);
+
   if (!user) {
     return res.status(404).json(new ApiResponse(404, {}, "User not found"));
   }
+  
   return res
     .status(200)
     .json(new ApiResponse(200, {}, "User deleted successfully"));
@@ -979,4 +1561,6 @@ export {
   deleteUser,
   forgotPassword,
   resetPassword,
+  renderResetPasswordForm,
+  updateUserDetails,
 };

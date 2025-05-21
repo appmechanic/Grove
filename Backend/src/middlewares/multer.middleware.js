@@ -1,3 +1,4 @@
+// It's used for handling image uploads for the cloudinary service.
 // import multer from "multer";
 
 // const storage = multer.diskStorage({
@@ -13,6 +14,7 @@
 // export const upload = multer({ storage: storage });
 
 
+// This middleware is used for handling file uploads in Digital Ocean Spaces.
 import multer from "multer";
 
 // Memory storage to store file as buffer instead of writing to disk

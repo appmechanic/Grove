@@ -7,6 +7,7 @@ import {
   logoutUser,
   refreshAccessToken,
   registerUser,
+  renderResetPasswordForm,
   resendVerificationEmail,
   resetPassword,
   uploadProfileImageCloudinary,
@@ -17,7 +18,7 @@ import {
   verifyEmail,
 } from "../controllers/user.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
-import { upload, uploadSingle } from "../middlewares/multer.middleware.js";
+import { uploadSingle } from "../middlewares/multer.middleware.js";
 
 const router = Router();
 
@@ -28,6 +29,8 @@ router.route("/verify-email/:token").get(verifyEmail);
 router.route("/resend-verification-email").post(resendVerificationEmail);
 
 router.route("/forgot-password").post(forgotPassword);
+
+router.route("/reset-password/:token").get(renderResetPasswordForm);
 
 router.route("/reset-password").post(resetPassword);
 
