@@ -1099,6 +1099,7 @@ const userMumOrBusinessDetails = asyncHandler(async (req, res) => {
   }
 });
 
+
 const userSubscriptionDetails = asyncHandler(async (req, res) => {
   const userId = req.user._id;
   if (!userId) {
@@ -1435,109 +1436,7 @@ const renderResetPasswordForm = asyncHandler(async (req, res) => {
       </html>
     `);
   }
-
-  // Render the password reset form
-  // res.send(`
-  //   <!DOCTYPE html>
-  //   <html>
-  //   <head>
-  //     <title>Reset Your Password</title>
-  //     <style>
-  //       body {
-  //         font-family: Arial, sans-serif;
-  //         line-height: 1.6;
-  //         max-width: 500px;
-  //         margin: 0 auto;
-  //         padding: 20px;
-  //       }
-  //       .form-container {
-  //         background-color: #f9f9f9;
-  //         border: 1px solid #ddd;
-  //         border-radius: 5px;
-  //         padding: 25px;
-  //         margin-top: 40px;
-  //       }
-  //       h1 {
-  //         color: #333;
-  //         text-align: center;
-  //         margin-bottom: 25px;
-  //       }
-  //       .form-group {
-  //         margin-bottom: 20px;
-  //       }
-  //       label {
-  //         display: block;
-  //         margin-bottom: 8px;
-  //         font-weight: bold;
-  //       }
-  //       input[type="password"] {
-  //         width: 100%;
-  //         padding: 10px;
-  //         border: 1px solid #ddd;
-  //         border-radius: 4px;
-  //         font-size: 16px;
-  //       }
-  //       button {
-  //         background-color: #f39c12;
-  //         color: white;
-  //         border: none;
-  //         padding: 12px 20px;
-  //         border-radius: 4px;
-  //         font-size: 16px;
-  //         cursor: pointer;
-  //         width: 100%;
-  //       }
-  //       button:hover {
-  //         background-color: #e67e22;
-  //       }
-  //       .error-message {
-  //         color: #cc0000;
-  //         margin-top: 5px;
-  //         display: none;
-  //       }
-  //       .error-visible {
-  //         display: block;
-  //       }
-  //     </style>
-  //   </head>
-  //   <body>
-  //     <div class="form-container">
-  //       <h1>Reset Your Password</h1>
-  //       <form id="resetForm" action="/api/v1/user/reset-password" method="POST">
-  //         <input type="hidden" name="token" value="${token}">
-
-  //         <div class="form-group">
-  //           <label for="password">New Password</label>
-  //           <input type="password" id="password" name="newPassword" required>
-  //         </div>
-
-  //         <div class="form-group">
-  //           <label for="confirmPassword">Confirm Password</label>
-  //           <input type="password" id="confirmPassword" name="confirmPassword" required>
-  //           <div id="passwordError" class="error-message">Passwords must match</div>
-  //         </div>
-
-  //         <button type="submit">Reset Password</button>
-  //       </form>
-  //     </div>
-
-  //     <script>
-  //       document.getElementById('resetForm').addEventListener('submit', function(event) {
-  //         const password = document.getElementById('password').value;
-  //         const confirmPassword = document.getElementById('confirmPassword').value;
-  //         const passwordError = document.getElementById('passwordError');
-
-  //         if (password !== confirmPassword) {
-  //           event.preventDefault();
-  //           passwordError.classList.add('error-visible');
-  //         } else {
-  //           passwordError.classList.remove('error-visible');
-  //         }
-  //       });
-  //     </script>
-  //   </body>
-  //   </html>
-  // `);
+  
   res.send(`
     <!DOCTYPE html>
     <html>
