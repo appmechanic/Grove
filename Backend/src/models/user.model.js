@@ -62,6 +62,10 @@ const userSchema = new Schema(
     bio: {
       type: String,
     },
+    surburb: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Surburb",
+    }
   },
   { timestamps: true }
 );

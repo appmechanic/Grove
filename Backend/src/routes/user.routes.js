@@ -10,6 +10,7 @@ import {
   renderResetPasswordForm,
   resendVerificationEmail,
   resetPassword,
+  updateUserDetails,
   uploadProfileImageCloudinary,
   uploadProfileImageDigitalOcean,
   userMumOrBusinessDetails,
@@ -48,6 +49,8 @@ router.route("/user-role").post(verifyJWT, userRole);
 router.route("/user-description").post(verifyJWT, userMumOrBusinessDetails);
 router.route("/user-subscription").post(verifyJWT, userSubscriptionDetails);
 router.route("/user-details").get(verifyJWT, getUserDetails);
+router.route("/update-user").patch(verifyJWT, updateUserDetails);
 router.route("/user-delete").delete(verifyJWT, deleteUser);
+
 
 export default router;

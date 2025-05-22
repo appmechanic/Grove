@@ -386,7 +386,7 @@ const forgotPassword = asyncHandler(async (req, res) => {
     subject: "Reset your Grove password",
     html: `
     <div style="font-family: Arial, sans-serif; padding: 20px; line-height: 1.6;">
-      <h2>Hi there,},</h2>
+      <h2>Hi there,</h2>
 
       <p>We received a request to reset the password for your <strong>Grove</strong> account.</p>
 
@@ -525,7 +525,7 @@ const resetPassword = asyncHandler(async (req, res) => {
       </html>
     `);
   }
-   if (newPassword.length < 8) {
+  if (newPassword.length < 8) {
     return res.send(`
       <!DOCTYPE html>
       <html>
@@ -575,7 +575,7 @@ const resetPassword = asyncHandler(async (req, res) => {
       </html>
     `);
   }
-  
+
   const specialCharRegex = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]+/;
   if (!specialCharRegex.test(newPassword)) {
     return res.send(`
@@ -1186,44 +1186,190 @@ const userSubscriptionDetails = asyncHandler(async (req, res) => {
   }
 });
 
+
+// GET Request
 const updateUserDetails = asyncHandler(async (req, res) => {
   const userId = req.user._id;
+  console.log("req.body-->>", req.body);
+
   if (!userId) {
     return res
       .status(400)
       .json(new ApiResponse(400, {}, "User ID is required"));
   }
+
   const user = await User.findById(userId);
   if (!user) {
     return res.status(404).json(new ApiResponse(404, {}, "User not found"));
   }
 
-  const updatedUser = await User.findByIdAndUpdate(
-    userId,
-    {
-      $set: {
-        ...req.body,
-      },
-    },
-    {
-      new: true,
+  // Define allowed fields for update
+  const allowedFields = [
+    "fullName",
+    "bio",
+    "surburb",
+    "role",
+    "businessDetails",
+    "mumDetails",
+  ];
+
+  // Check if any of the provided fields are allowed
+  const invalidFields = Object.keys(req.body).filter(
+    (field) => !allowedFields.includes(field)
+  );
+  if (invalidFields.length > 0) {
+    return res
+      .status(400)
+      .json(
+        new ApiResponse(400, {}, `Invalid fields: ${invalidFields.join(", ")}`)
+      );
+  }
+
+  console.log("invalidFields-->>", invalidFields);
+
+  // Create update object with only allowed fields
+  const updateData = {};
+
+  // Handle simple fields
+  if (req.body.fullName !== undefined) {
+    updateData.fullName = req.body.fullName;
+  }
+
+  if (req.body.bio !== undefined) {
+    updateData.bio = req.body.bio;
+  }
+
+  if (req.body.surburb !== undefined) {
+    updateData.surburb = req.body.surburb;
+  }
+
+  if (req.body.role !== undefined) {
+    // Validate role
+    if (!["mum", "business"].includes(req.body.role)) {
+      return res
+        .status(400)
+        .json(
+          new ApiResponse(400, {}, "Invalid role. Must be 'mum' or 'business'")
+        );
     }
-  ).select("-password -refreshToken");
-  if (!updatedUser) {
+    updateData.role = req.body.role;
+  }
+
+  // Handle businessDetails - merge with existing data
+  if (req.body.businessDetails !== undefined) {
+    const currentBusinessDetails = user.businessDetails || {};
+    updateData.businessDetails = {
+      ...(currentBusinessDetails.toObject
+        ? currentBusinessDetails.toObject()
+        : currentBusinessDetails),
+      ...req.body.businessDetails,
+    };
+
+    // Validate businessPlan if provided
+    if (
+      req.body.businessDetails.businessPlan &&
+      !["free", "monthly", "yearly"].includes(
+        req.body.businessDetails.businessPlan
+      )
+    ) {
+      return res
+        .status(400)
+        .json(
+          new ApiResponse(
+            400,
+            {},
+            "Invalid business plan. Must be 'free', 'monthly', or 'yearly'"
+          )
+        );
+    }
+  }
+
+  // Handle mumDetails - merge with existing data
+  if (req.body.mumDetails !== undefined) {
+    const currentMumDetails = user.mumDetails || {};
+    updateData.mumDetails = {
+      ...(currentMumDetails.toObject
+        ? currentMumDetails.toObject()
+        : currentMumDetails),
+      ...req.body.mumDetails,
+    };
+
+    // Validate mumPlan if provided
+    if (
+      req.body.mumDetails.mumPlan &&
+      !["free", "monthly", "yearly"].includes(req.body.mumDetails.mumPlan)
+    ) {
+      return res
+        .status(400)
+        .json(
+          new ApiResponse(
+            400,
+            {},
+            "Invalid mum plan. Must be 'free', 'monthly', or 'yearly'"
+          )
+        );
+    }
+  }
+
+  // Check if there's anything to update
+  if (Object.keys(updateData).length === 0) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, {}, "No valid fields provided for update"));
+  }
+
+  try {
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { $set: updateData },
+      {
+        new: true,
+        runValidators: true, // This ensures schema validations are run
+      }
+    ).select(
+      "-password -refreshToken -emailVerificationToken -resetPasswordToken"
+    );
+
+    if (!updatedUser) {
+      return res
+        .status(500)
+        .json(
+          new ApiResponse(500, {}, "Something went wrong while updating user")
+        );
+    }
+
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(200, updatedUser, "User details updated successfully")
+      );
+  } catch (error) {
+    console.error("Update user error:", error);
+
+    // Handle validation errors
+    if (error.name === "ValidationError") {
+      const validationErrors = Object.values(error.errors).map(
+        (err) => err.message
+      );
+      return res
+        .status(400)
+        .json(
+          new ApiResponse(
+            400,
+            {},
+            `Validation error: ${validationErrors.join(", ")}`
+          )
+        );
+    }
+
     return res
       .status(500)
       .json(
-        new ApiResponse(500, {}, "Something went wrong while updating user")
+        new ApiResponse(500, {}, "Internal server error while updating user")
       );
   }
-  return res
-    .status(200)
-    .json(
-      new ApiResponse(200, updatedUser, "User details updated successfully")
-    );
 });
 
-// GET Request
 const getUserDetails = asyncHandler(async (req, res) => {
   const userId = req.user._id;
   if (!userId) {
@@ -1359,18 +1505,18 @@ const renderResetPasswordForm = asyncHandler(async (req, res) => {
   //       <h1>Reset Your Password</h1>
   //       <form id="resetForm" action="/api/v1/user/reset-password" method="POST">
   //         <input type="hidden" name="token" value="${token}">
-          
+
   //         <div class="form-group">
   //           <label for="password">New Password</label>
   //           <input type="password" id="password" name="newPassword" required>
   //         </div>
-          
+
   //         <div class="form-group">
   //           <label for="confirmPassword">Confirm Password</label>
   //           <input type="password" id="confirmPassword" name="confirmPassword" required>
   //           <div id="passwordError" class="error-message">Passwords must match</div>
   //         </div>
-          
+
   //         <button type="submit">Reset Password</button>
   //       </form>
   //     </div>
@@ -1380,7 +1526,7 @@ const renderResetPasswordForm = asyncHandler(async (req, res) => {
   //         const password = document.getElementById('password').value;
   //         const confirmPassword = document.getElementById('confirmPassword').value;
   //         const passwordError = document.getElementById('passwordError');
-          
+
   //         if (password !== confirmPassword) {
   //           event.preventDefault();
   //           passwordError.classList.add('error-visible');
@@ -1392,7 +1538,7 @@ const renderResetPasswordForm = asyncHandler(async (req, res) => {
   //   </body>
   //   </html>
   // `);
-   res.send(`
+  res.send(`
     <!DOCTYPE html>
     <html>
     <head>
@@ -1533,13 +1679,13 @@ const deleteUser = asyncHandler(async (req, res) => {
       .status(400)
       .json(new ApiResponse(400, {}, "User ID is required"));
   }
-  
+
   const user = await User.findByIdAndDelete(userId);
 
   if (!user) {
     return res.status(404).json(new ApiResponse(404, {}, "User not found"));
   }
-  
+
   return res
     .status(200)
     .json(new ApiResponse(200, {}, "User deleted successfully"));
